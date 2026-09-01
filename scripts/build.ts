@@ -18,7 +18,7 @@ type Browser = "chrome" | "firefox";
 
 const entryPoints = [
     "background/index.ts",
-    "content/index.ts",
+    "content/main.ts",
     "popup/index.ts",
     "options/index.ts",
 ];

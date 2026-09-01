@@ -6,7 +6,6 @@
  * Copyright: 2026 SHWorX (Steffen Haase)
  */
 
-import type { FilterConfiguration } from "../../src/shared/types.js";
 import {
     afterEach,
     beforeEach,
@@ -35,7 +34,6 @@ import {
     extractApplicationUrlFromHtml,
     extractJobIdFromContainer,
     fetchApplicationUrl,
-    initializeContent,
 } from "../../src/content/index.js";
 
 const applicationUrl =
@@ -81,58 +79,6 @@ function createApplicationHtml(
             </body>
         </html>
     `;
-}
-
-function createConfiguration(
-    overrides: Partial<FilterConfiguration> = {},
-): FilterConfiguration
-{
-    return {
-        enabled: true,
-        filters: [
-            {
-                id: "micro1",
-                value: "micro1.ai",
-                matchType: "domain",
-                enabled: true,
-            },
-        ],
-        ...overrides,
-    };
-}
-
-function setConfiguration(
-    configuration: FilterConfiguration,
-): void
-{
-    chromeMock.storage.local.get.mockResolvedValue({
-        configuration,
-    });
-}
-
-function createJobWithoutJobId(): HTMLElement
-{
-    const container = document.createElement("li");
-
-    container.className =
-        "jobs-search-results__list-item";
-
-    document.body.appendChild(container);
-
-    return container;
-}
-
-async function waitForJobProcessing(
-    container: Element,
-): Promise<void>
-{
-    await vi.waitFor(() => {
-        expect(
-            container.getAttribute(
-                "data-linksieve-processed",
-            ),
-        ).toBe("true");
-    });
 }
 
 describe("content", () => {
