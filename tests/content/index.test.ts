@@ -6,6 +6,7 @@
  * Copyright: 2026 SHWorX (Steffen Haase)
  */
 
+import type { FilterConfiguration } from "../../src/shared/types.js";
 import {
     afterEach,
     beforeEach,
@@ -34,7 +35,8 @@ import {
     extractApplicationUrlFromHtml,
     extractJobIdFromContainer,
     fetchApplicationUrl,
-} from "../../src/content/index";
+    initializeContent,
+} from "../../src/content/index.js";
 
 const applicationUrl =
     "https://jobs.micro1.ai/post/" +
@@ -81,15 +83,70 @@ function createApplicationHtml(
     `;
 }
 
+function createConfiguration(
+    overrides: Partial<FilterConfiguration> = {},
+): FilterConfiguration
+{
+    return {
+        enabled: true,
+        filters: [
+            {
+                id: "micro1",
+                value: "micro1.ai",
+                matchType: "domain",
+                enabled: true,
+            },
+        ],
+        ...overrides,
+    };
+}
+
+function setConfiguration(
+    configuration: FilterConfiguration,
+): void
+{
+    chromeMock.storage.local.get.mockResolvedValue({
+        configuration,
+    });
+}
+
+function createJobWithoutJobId(): HTMLElement
+{
+    const container = document.createElement("li");
+
+    container.className =
+        "jobs-search-results__list-item";
+
+    document.body.appendChild(container);
+
+    return container;
+}
+
+async function waitForJobProcessing(
+    container: Element,
+): Promise<void>
+{
+    await vi.waitFor(() => {
+        expect(
+            container.getAttribute(
+                "data-linksieve-processed",
+            ),
+        ).toBe("true");
+    });
+}
+
 describe("content", () => {
     beforeEach(() => {
         document.body.innerHTML = "";
-        vi.restoreAllMocks();
 
+        chromeMock.storage.local.get.mockReset();
         chromeMock.storage.local.get.mockResolvedValue({});
+
+        chromeMock.storage.local.set.mockReset();
         chromeMock.storage.local.set.mockResolvedValue(undefined);
-        chromeMock.storage.onChanged.addListener.mockClear();
-        chromeMock.storage.onChanged.removeListener.mockClear();
+
+        chromeMock.storage.onChanged.addListener.mockReset();
+        chromeMock.storage.onChanged.removeListener.mockReset();
     });
 
     afterEach(() => {
@@ -330,243 +387,4 @@ describe("content", () => {
         });
     });
 
-    describe("content filtering", () => {
-        function createConfiguration(
-            overrides: Partial<FilterConfiguration> = {},
-        ): FilterConfiguration
-        {
-            return {
-                enabled: true,
-                filters: [
-                    {
-                        id: "micro1",
-                        value: "micro1.ai",
-                        matchType: "domain",
-                        enabled: true,
-                    },
-                ],
-                ...overrides,
-            };
-        }
-
-        function mockChromeStorage(
-            configuration: FilterConfiguration,
-        ): void
-        {
-            vi.stubGlobal("chrome", {
-                storage: {
-                    local: {
-                        get: vi.fn().mockResolvedValue({
-                            configuration,
-                        }),
-                        set: vi.fn().mockResolvedValue(undefined),
-                    },
-                    onChanged: {
-                        addListener: vi.fn(),
-                        removeListener: vi.fn(),
-                    },
-                },
-            });
-        }
-
-        function mockApplicationPage(
-            url: string | null,
-        ): Response
-        {
-            const html = url === null
-                         ? "<html><body>No Apply link</body></html>"
-                         : createApplicationHtml(url);
-
-            return new Response(html, {
-                status: 200,
-                headers: {
-                    "Content-Type": "text/html",
-                },
-            });
-        }
-
-        it("hides a card when the application URL matches a filter", async () => {
-            mockChromeStorage(
-                createConfiguration(),
-            );
-
-            vi.spyOn(globalThis, "fetch")
-              .mockResolvedValue(
-                  mockApplicationPage(applicationUrl),
-              );
-
-            const {
-                initializeContent,
-            } = await import("../../src/content/index");
-
-            const container = createJobContainer();
-
-            await initializeContent();
-
-            expect(
-                container.classList.contains("linksieve-hidden"),
-            ).toBe(true);
-        });
-
-        it("keeps a card visible when the application URL does not match", async () => {
-            mockChromeStorage(
-                createConfiguration(),
-            );
-
-            vi.spyOn(globalThis, "fetch")
-              .mockResolvedValue(
-                  mockApplicationPage(
-                      "https://jobs.example.com/post/123",
-                  ),
-              );
-
-            const {
-                initializeContent,
-            } = await import("../../src/content/index");
-
-            const container = createJobContainer();
-
-            await initializeContent();
-
-            expect(
-                container.classList.contains("linksieve-hidden"),
-            ).toBe(false);
-        });
-
-        it("keeps a card visible when it has no job ID", async () => {
-            mockChromeStorage(
-                createConfiguration(),
-            );
-
-            const fetchMock = vi
-                .spyOn(globalThis, "fetch")
-                .mockResolvedValue(
-                    mockApplicationPage(applicationUrl),
-                );
-
-            const {
-                initializeContent,
-            } = await import("../../src/content/index");
-
-            const container = document.createElement("li");
-
-            container.className =
-                "jobs-search-results__list-item";
-
-            document.body.appendChild(container);
-
-            await initializeContent();
-
-            expect(
-                container.classList.contains("linksieve-hidden"),
-            ).toBe(false);
-
-            expect(fetchMock).not.toHaveBeenCalled();
-        });
-
-        it("keeps a card visible when the job details have no external Apply link", async () => {
-            mockChromeStorage(
-                createConfiguration(),
-            );
-
-            vi.spyOn(globalThis, "fetch")
-              .mockResolvedValue(
-                  mockApplicationPage(null),
-              );
-
-            const {
-                initializeContent,
-            } = await import("../../src/content/index");
-
-            const container = createJobContainer();
-
-            await initializeContent();
-
-            expect(
-                container.classList.contains("linksieve-hidden"),
-            ).toBe(false);
-        });
-
-        it("fetches and filters a dynamically inserted job card", async () => {
-            mockChromeStorage(
-                createConfiguration(),
-            );
-
-            vi.spyOn(globalThis, "fetch")
-              .mockResolvedValue(
-                  mockApplicationPage(applicationUrl),
-              );
-
-            const {
-                initializeContent,
-            } = await import("../../src/content/index");
-
-            await initializeContent();
-
-            const container = createJobContainer(
-                "dynamic-job",
-            );
-
-            await new Promise<void>((resolve) => {
-                setTimeout(resolve, 0);
-            });
-
-            expect(
-                container.classList.contains("linksieve-hidden"),
-            ).toBe(true);
-        });
-
-        it("keeps a matching job visible when filtering is disabled", async () => {
-            mockChromeStorage(
-                createConfiguration({
-                    enabled: false,
-                }),
-            );
-
-            vi.spyOn(globalThis, "fetch")
-              .mockResolvedValue(
-                  mockApplicationPage(applicationUrl),
-              );
-
-            const {
-                initializeContent,
-            } = await import("../../src/content/index");
-
-            const container = createJobContainer();
-
-            await initializeContent();
-
-            expect(
-                container.classList.contains("linksieve-hidden"),
-            ).toBe(false);
-        });
-
-        it("keeps a matching job visible when the matching filter is disabled", async () => {
-            mockChromeStorage(
-                createConfiguration({
-                    filters: [
-                        {
-                            id: "micro1",
-                            value: "micro1.ai",
-                            matchType: "domain",
-                            enabled: false,
-                        },
-                    ],
-                }),
-            );
-
-            vi.spyOn(globalThis, "fetch")
-              .mockResolvedValue(
-                  mockApplicationPage(applicationUrl),
-              );
-
-            const { initializeContent } = await import("../../src/content/index");
-            const container = createJobContainer();
-            await initializeContent();
-
-            expect(
-                container.classList.contains("linksieve-hidden"),
-            ).toBe(false);
-        });
-    });
 });

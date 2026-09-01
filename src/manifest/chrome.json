@@ -27,7 +27,7 @@
                 "https://www.linkedin.com/jobs/*"
             ],
             "js": [
-                "content/index.js"
+                "content/main.js"
             ],
             "css": [
                 "content/styles.css"
