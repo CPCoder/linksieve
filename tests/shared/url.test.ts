@@ -397,4 +397,44 @@ describe("extractLinkedInJobId", () => {
     it("returns null for an invalid URL", () => {
         expect(extractLinkedInJobId("invalid")).toBeNull();
     });
+
+    it("normalizes a valid domain", () => {
+        expect(normalizeDomain("  MICRO1.AI  ")).toBe("micro1.ai");
+    });
+
+    it("normalizes a domain with a subdomain", () => {
+        expect(normalizeDomain("jobs.MICRO1.AI")).toBe("jobs.micro1.ai");
+    });
+
+    it("normalizes a domain URL", () => {
+        expect(normalizeDomain("https://jobs.micro1.ai/path")).toBe(
+            "jobs.micro1.ai",
+        );
+    });
+
+    it("removes a trailing domain dot", () => {
+        expect(normalizeDomain("micro1.ai.")).toBe("micro1.ai");
+    });
+
+    it("rejects whitespace in a domain", () => {
+        expect(normalizeDomain("not a valid domain")).toBeNull();
+    });
+
+    it("rejects an invalid domain label", () => {
+        expect(normalizeDomain("-example.com")).toBeNull();
+    });
+
+    it("rejects a domain label ending with a hyphen", () => {
+        expect(normalizeDomain("example-.com")).toBeNull();
+    });
+
+    it("rejects an empty domain label", () => {
+        expect(normalizeDomain("example..com")).toBeNull();
+    });
+
+    it("rejects an overlong domain label", () => {
+        const label = "a".repeat(64);
+
+        expect(normalizeDomain(`${label}.com`)).toBeNull();
+    });
 });

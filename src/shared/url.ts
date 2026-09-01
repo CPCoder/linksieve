@@ -2,18 +2,34 @@
  * Project:   LinkSieve
  * File:      url.ts
  * Date:      2026-09-01
- * Author:    Steffen Haase <shworx.development@gmail.com
+ * Author:    Steffen Haase <shworx.development@gmail.com>
  * Copyright: 2026 SHWorX (Steffen Haase)
  */
-
-const LINKEDIN_HOST = "www.linkedin.com";
-const LINKEDIN_SAFETY_PATH = "/safety/go/";
-const LINKEDIN_JOB_PATH_PATTERN = /^\/jobs\/view\/(\d+)(?:\/|$)/;
 
 import type {
     FilterConfiguration,
     FilterRule,
 } from "./types";
+
+const LINKEDIN_HOST = "www.linkedin.com";
+const LINKEDIN_SAFETY_PATH = "/safety/go/";
+const LINKEDIN_JOB_PATH_PATTERN = /^\/jobs\/view\/(\d+)(?:\/|$)/;
+const DOMAIN_LABEL_PATTERN = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/i;
+
+function isValidDomain(domain: string): boolean
+{
+    if (domain.length > 253) {
+        return false;
+    }
+
+    const labels = domain.split(".");
+
+    if (labels.some((label) => label === "" || label.length > 63)) {
+        return false;
+    }
+
+    return labels.every((label) => DOMAIN_LABEL_PATTERN.test(label));
+}
 
 export function normalizeUrl(value: string): string | null
 {
@@ -70,7 +86,11 @@ export function normalizeDomain(value: string): string | null
 
     domain = domain.replace(/\.$/, "");
 
-    return domain === "" ? null : domain;
+    if (domain === "" || !isValidDomain(domain)) {
+        return null;
+    }
+
+    return domain;
 }
 
 export function matchesDomain(url: string, domain: string): boolean

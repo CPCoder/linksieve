@@ -18,17 +18,24 @@ export default defineConfig({
                 test: {
                     name: "unit",
                     include: [
-                        "tests/**/*.test.ts",
-                        "!tests/content/**/*.test.ts",
+                        "tests/shared/**/*.test.ts",
                     ],
                     environment: "node",
                 },
             },
             {
                 test: {
-                    name: "content",
-                    include: ["tests/content/**/*.test.ts"],
+                    name: "dom",
+                    include: [
+                        "tests/content/**/*.test.ts",
+                        "tests/options/**/*.test.ts",
+                    ],
                     environment: "jsdom",
+                    environmentOptions: {
+                        jsdom: {
+                            url: "https://www.linkedin.com",
+                        },
+                    },
                 },
             },
         ],
