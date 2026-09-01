@@ -12,12 +12,18 @@ import {
     extractLinkedInSafetyDestination,
     getDomain,
     isLinkedInSafetyUrl,
+    matchesConfiguration,
     matchesDomain,
+    matchesFilterRule,
     matchesUrl,
     normalizeDomain,
     normalizeUrl,
     resolveExternalApplicationUrl,
 } from "../../src/shared/url";
+import type {
+    FilterConfiguration,
+    FilterRule,
+} from "../../src/shared/types";
 
 describe("normalizeUrl", () => {
     it("normalizes a valid URL", () => {
@@ -126,6 +132,144 @@ describe("matchesUrl", () => {
             matchesUrl(
                 "https://example.com/job/123",
                 "https://example.com/job",
+            ),
+        ).toBe(false);
+    });
+});
+
+describe("matchesFilterRule", () => {
+    it("matches an enabled domain rule", () => {
+        const rule: FilterRule = {
+            id: "micro1-ai",
+            value: "micro1.ai",
+            matchType: "domain",
+            enabled: true,
+        };
+
+        expect(
+            matchesFilterRule(
+                "https://jobs.micro1.ai/post/123",
+                rule,
+            ),
+        ).toBe(true);
+    });
+
+    it("does not match a disabled rule", () => {
+        const rule: FilterRule = {
+            id: "micro1-ai",
+            value: "micro1.ai",
+            matchType: "domain",
+            enabled: false,
+        };
+
+        expect(
+            matchesFilterRule(
+                "https://jobs.micro1.ai/post/123",
+                rule,
+            ),
+        ).toBe(false);
+    });
+
+    it("matches an enabled exact URL rule", () => {
+        const rule: FilterRule = {
+            id: "specific-job",
+            value: "https://example.com/jobs/123",
+            matchType: "url",
+            enabled: true,
+        };
+
+        expect(
+            matchesFilterRule(
+                "https://example.com/jobs/123",
+                rule,
+            ),
+        ).toBe(true);
+    });
+
+    it("does not match a different URL with the same prefix", () => {
+        const rule: FilterRule = {
+            id: "specific-job",
+            value: "https://example.com/jobs/123",
+            matchType: "url",
+            enabled: true,
+        };
+
+        expect(
+            matchesFilterRule(
+                "https://example.com/jobs/1234",
+                rule,
+            ),
+        ).toBe(false);
+    });
+});
+
+describe("matchesConfiguration", () => {
+    const configuration: FilterConfiguration = {
+        enabled: true,
+        filters: [
+            {
+                id: "micro1-ai",
+                value: "micro1.ai",
+                matchType: "domain",
+                enabled: true,
+            },
+            {
+                id: "example",
+                value: "example.com",
+                matchType: "domain",
+                enabled: true,
+            },
+        ],
+    };
+
+    it("matches when any enabled rule matches", () => {
+        expect(
+            matchesConfiguration(
+                "https://jobs.micro1.ai/post/123",
+                configuration,
+            ),
+        ).toBe(true);
+
+        expect(
+            matchesConfiguration(
+                "https://careers.example.com/jobs/123",
+                configuration,
+            ),
+        ).toBe(true);
+    });
+
+    it("does not match when no rule matches", () => {
+        expect(
+            matchesConfiguration(
+                "https://jobs.other.com/post/123",
+                configuration,
+            ),
+        ).toBe(false);
+    });
+
+    it("does not match when filtering is disabled", () => {
+        expect(
+            matchesConfiguration(
+                "https://jobs.micro1.ai/post/123",
+                {
+                    ...configuration,
+                    enabled: false,
+                },
+            ),
+        ).toBe(false);
+    });
+
+    it("ignores disabled rules", () => {
+        expect(
+            matchesConfiguration(
+                "https://jobs.micro1.ai/post/123",
+                {
+                    enabled: true,
+                    filters: configuration.filters.map((filter) => ({
+                        ...filter,
+                        enabled: false,
+                    })),
+                },
             ),
         ).toBe(false);
     });

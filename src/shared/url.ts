@@ -10,6 +10,11 @@ const LINKEDIN_HOST = "www.linkedin.com";
 const LINKEDIN_SAFETY_PATH = "/safety/go/";
 const LINKEDIN_JOB_PATH_PATTERN = /^\/jobs\/view\/(\d+)(?:\/|$)/;
 
+import type {
+    FilterConfiguration,
+    FilterRule,
+} from "./types";
+
 export function normalizeUrl(value: string): string | null
 {
     const input = value.trim();
@@ -92,6 +97,37 @@ export function matchesUrl(url: string, filter: string): boolean
     return normalizedUrl === normalizedFilter;
 }
 
+export function matchesFilterRule(
+    url: string,
+    rule: FilterRule,
+): boolean
+{
+    if (!rule.enabled) {
+        return false;
+    }
+
+    switch (rule.matchType) {
+        case "domain":
+            return matchesDomain(url, rule.value);
+        case "url":
+            return matchesUrl(url, rule.value);
+        default:
+            return false;
+    }
+}
+
+export function matchesConfiguration(
+    url: string,
+    configuration: FilterConfiguration,
+): boolean
+{
+    if (!configuration.enabled) {
+        return false;
+    }
+
+    return configuration.filters.some((rule) => matchesFilterRule(url, rule));
+}
+
 export function isLinkedInSafetyUrl(value: string): boolean
 {
     const normalizedUrl = normalizeUrl(value);
@@ -133,7 +169,9 @@ export function extractLinkedInSafetyDestination(
     }
 }
 
-export function resolveExternalApplicationUrl(value: string): string | null
+export function resolveExternalApplicationUrl(
+    value: string,
+): string | null
 {
     if (isLinkedInSafetyUrl(value)) {
         return extractLinkedInSafetyDestination(value);
