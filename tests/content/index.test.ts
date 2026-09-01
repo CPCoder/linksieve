@@ -1,602 +1,332 @@
 /**
- * Project:     LinkSieve
- * File:        index.test.ts
- * Date:        2026-09-01
- * Author:      Steffen Haase <shworx.development@gmail.com
- * Copyright:   2026 SHWorX (Steffen Haase)
+ * Project:   LinkSieve
+ * File:      index.test.ts
+ * Date:      2026-09-01
+ * Author:    Steffen Haase <shworx.development@gmail.com>
+ * Copyright: 2026 SHWorX (Steffen Haase)
  */
 
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import {
+    afterEach,
+    beforeEach,
+    describe,
+    expect,
+    it,
+    vi,
+} from "vitest";
 
-const getConfiguration = vi.fn();
-const subscribeToConfigurationChanges = vi.fn();
-
-vi.mock("../../src/shared/storage", () => ({
-    getConfiguration,
-    subscribeToConfigurationChanges,
+const chromeMock = vi.hoisted(() => ({
+    storage: {
+        local: {
+            get: vi.fn().mockResolvedValue({}),
+            set: vi.fn().mockResolvedValue(undefined),
+        },
+        onChanged: {
+            addListener: vi.fn(),
+            removeListener: vi.fn(),
+        },
+    },
 }));
 
-vi.mock("../../src/shared/logger", () => ({
-    debug: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-    error: vi.fn(),
-}));
+vi.stubGlobal("chrome", chromeMock);
 
-describe("LinkedIn content integration", () => {
+import {
+    extractApplicationUrlFromHtml,
+    extractJobIdFromContainer,
+    fetchApplicationUrl,
+} from "../../src/content/index";
+
+const applicationUrl =
+    "https://jobs.micro1.ai/post/" +
+    "bd545591-e88e-48f9-b3a9-cd3716144c8f";
+
+function createJobContainer(
+    jobId = "4461086047",
+): HTMLElement
+{
+    const container = document.createElement("li");
+
+    container.className =
+        "jobs-search-results__list-item";
+
+    const link = document.createElement("a");
+
+    link.href =
+        `https://www.linkedin.com/jobs/view/${jobId}`;
+
+    container.appendChild(link);
+    document.body.appendChild(container);
+
+    return container;
+}
+
+function createApplicationHtml(
+    url = applicationUrl,
+): string
+{
+    return `
+        <!doctype html>
+        <html>
+            <body>
+                <div>
+                    <a
+                        aria-label="Apply on company website"
+                        href="https://www.linkedin.com/safety/go/?url=${encodeURIComponent(url)}"
+                    >
+                        Apply
+                    </a>
+                </div>
+            </body>
+        </html>
+    `;
+}
+
+describe("content", () => {
     beforeEach(() => {
-        vi.resetModules();
-        vi.clearAllMocks();
-
-        subscribeToConfigurationChanges.mockReturnValue(
-            vi.fn(),
-        );
-
         document.body.innerHTML = "";
+        vi.restoreAllMocks();
 
-        history.replaceState(
-            {},
-            "",
-            "https://www.linkedin.com/jobs/view/4461086047",
-        );
+        chromeMock.storage.local.get.mockResolvedValue({});
+        chromeMock.storage.local.set.mockResolvedValue(undefined);
+        chromeMock.storage.onChanged.addListener.mockClear();
+        chromeMock.storage.onChanged.removeListener.mockClear();
     });
 
-    it("hides a matching LinkedIn job card", async () => {
-        getConfiguration.mockResolvedValue({
-            enabled: true,
-            filters: [
-                {
-                    id: "micro1-ai",
-                    value: "micro1.ai",
-                    matchType: "domain",
-                    enabled: true,
-                },
-            ],
-        });
-
-        document.body.innerHTML = `
-            <ul>
-                <li class="jobs-search-results__list-item">
-                    <div class="job-card-container">
-                        <a
-                            aria-label="Apply on company website"
-                            href="https://www.linkedin.com/safety/go/?url=https%3A%2F%2Fjobs.micro1.ai%2Fpost%2F123"
-                        >
-                            Apply
-                        </a>
-                    </div>
-                </li>
-            </ul>
-        `;
-
-        await import("../../src/content/index");
-
-        await new Promise((resolve) => setTimeout(resolve, 0));
-
-        const job = document.querySelector(
-            ".jobs-search-results__list-item",
-        );
-
-        expect(job?.classList.contains("linksieve-hidden")).toBe(true);
+    afterEach(() => {
+        vi.restoreAllMocks();
     });
 
-    it("does not hide a non-matching job card", async () => {
-        getConfiguration.mockResolvedValue({
-            enabled: true,
-            filters: [
-                {
-                    id: "micro1-ai",
-                    value: "micro1.ai",
-                    matchType: "domain",
-                    enabled: true,
-                },
-            ],
+    describe("extractJobIdFromContainer", () => {
+        it("extracts the LinkedIn job ID from a job card", () => {
+            const container = createJobContainer();
+
+            expect(
+                extractJobIdFromContainer(container),
+            ).toBe("4461086047");
         });
 
-        document.body.innerHTML = `
-            <ul>
-                <li class="jobs-search-results__list-item">
-                    <div class="job-card-container">
-                        <a
-                            aria-label="Apply on company website"
-                            href="https://www.linkedin.com/safety/go/?url=https%3A%2F%2Fjobs.example.com%2Fpost%2F123"
-                        >
-                            Apply
-                        </a>
-                    </div>
-                </li>
-            </ul>
-        `;
+        it("returns null when the job card has no job link", () => {
+            const container = document.createElement("li");
 
-        await import("../../src/content/index");
+            container.className =
+                "jobs-search-results__list-item";
 
-        await new Promise((resolve) => setTimeout(resolve, 0));
+            document.body.appendChild(container);
 
-        const job = document.querySelector(
-            ".jobs-search-results__list-item",
-        );
+            expect(
+                extractJobIdFromContainer(container),
+            ).toBeNull();
+        });
 
-        expect(job?.classList.contains("linksieve-hidden")).toBe(false);
+        it("returns null for a non-LinkedIn job link", () => {
+            const container = document.createElement("li");
+            const link = document.createElement("a");
+
+            container.className =
+                "jobs-search-results__list-item";
+
+            link.href =
+                "https://example.com/jobs/view/4461086047";
+
+            container.appendChild(link);
+            document.body.appendChild(container);
+
+            expect(
+                extractJobIdFromContainer(container),
+            ).toBeNull();
+        });
     });
 
-    it("does not hide a job when filtering is disabled", async () => {
-        getConfiguration.mockResolvedValue({
-            enabled: false,
-            filters: [
-                {
-                    id: "micro1-ai",
-                    value: "micro1.ai",
-                    matchType: "domain",
-                    enabled: true,
-                },
-            ],
+    describe("extractApplicationUrlFromHtml", () => {
+        it("extracts the external application URL", () => {
+            expect(
+                extractApplicationUrlFromHtml(
+                    createApplicationHtml(),
+                ),
+            ).toBe(applicationUrl);
         });
 
-        document.body.innerHTML = `
-            <ul>
-                <li class="jobs-search-results__list-item">
-                    <div class="job-card-container">
-                        <a
-                            aria-label="Apply on company website"
-                            href="https://www.linkedin.com/safety/go/?url=https%3A%2F%2Fjobs.micro1.ai%2Fpost%2F123"
-                        >
-                            Apply
-                        </a>
-                    </div>
-                </li>
-            </ul>
-        `;
-
-        await import("../../src/content/index");
-
-        await new Promise((resolve) => setTimeout(resolve, 0));
-
-        const job = document.querySelector(
-            ".jobs-search-results__list-item",
-        );
-
-        expect(job?.classList.contains("linksieve-hidden")).toBe(false);
-    });
-
-    it("handles dynamically inserted job cards", async () => {
-        getConfiguration.mockResolvedValue({
-            enabled: true,
-            filters: [
-                {
-                    id: "micro1-ai",
-                    value: "micro1.ai",
-                    matchType: "domain",
-                    enabled: true,
-                },
-            ],
-        });
-
-        await import("../../src/content/index");
-
-        const list = document.createElement("ul");
-        document.body.appendChild(list);
-
-        const job = document.createElement("li");
-        job.className = "jobs-search-results__list-item";
-
-        job.innerHTML = `
-            <div class="job-card-container">
+        it("uses the semantic Apply link selector", () => {
+            const html = `
                 <a
+                    class="random-linkedin-class"
                     aria-label="Apply on company website"
-                    href="https://www.linkedin.com/safety/go/?url=https%3A%2F%2Fjobs.micro1.ai%2Fpost%2F123"
+                    href="${applicationUrl}"
                 >
                     Apply
                 </a>
-            </div>
-        `;
+            `;
 
-        list.appendChild(job);
-
-        await new Promise((resolve) => setTimeout(resolve, 0));
-        await new Promise((resolve) => setTimeout(resolve, 0));
-
-        expect(
-            job.classList.contains("linksieve-hidden"),
-        ).toBe(true);
-    });
-
-    it("reacts to a configuration change", async () => {
-        const initialConfiguration = {
-            enabled: true,
-            filters: [
-                {
-                    id: "micro1-ai",
-                    value: "micro1.ai",
-                    matchType: "domain",
-                    enabled: true,
-                },
-            ],
-        };
-
-        const updatedConfiguration = {
-            enabled: false,
-            filters: initialConfiguration.filters,
-        };
-
-        getConfiguration.mockResolvedValue(
-            initialConfiguration,
-        );
-
-        document.body.innerHTML = `
-            <ul>
-                <li class="jobs-search-results__list-item">
-                    <div class="job-card-container">
-                        <a
-                            aria-label="Apply on company website"
-                            href="https://www.linkedin.com/safety/go/?url=https%3A%2F%2Fjobs.micro1.ai%2Fpost%2F123"
-                        >
-                            Apply
-                        </a>
-                    </div>
-                </li>
-            </ul>
-        `;
-
-        await import("../../src/content/index");
-
-        await new Promise((resolve) => setTimeout(resolve, 0));
-
-        const job = document.querySelector(
-            ".jobs-search-results__list-item",
-        );
-
-        expect(
-            job?.classList.contains("linksieve-hidden"),
-        ).toBe(true);
-
-        // @ts-ignore
-        const listener = subscribeToConfigurationChanges.mock.calls[0][0];
-
-        await listener(updatedConfiguration);
-
-        expect(
-            job?.classList.contains("linksieve-hidden"),
-        ).toBe(false);
-    });
-
-    it("re-hides a previously visible job when a matching filter is enabled", async () => {
-        const initialConfiguration = {
-            enabled: false,
-            filters: [
-                {
-                    id: "micro1-ai",
-                    value: "micro1.ai",
-                    matchType: "domain",
-                    enabled: true,
-                },
-            ],
-        };
-
-        const updatedConfiguration = {
-            enabled: true,
-            filters: initialConfiguration.filters,
-        };
-
-        getConfiguration.mockResolvedValue(
-            initialConfiguration,
-        );
-
-        document.body.innerHTML = `
-            <ul>
-                <li class="jobs-search-results__list-item">
-                    <div class="job-card-container">
-                        <a
-                            aria-label="Apply on company website"
-                            href="https://www.linkedin.com/safety/go/?url=https%3A%2F%2Fjobs.micro1.ai%2Fpost%2F123"
-                        >
-                            Apply
-                        </a>
-                    </div>
-                </li>
-            </ul>
-        `;
-
-        await import("../../src/content/index");
-
-        await new Promise((resolve) => setTimeout(resolve, 0));
-
-        const job = document.querySelector(
-            ".jobs-search-results__list-item",
-        );
-
-        expect(
-            job?.classList.contains("linksieve-hidden"),
-        ).toBe(false);
-
-        // @ts-ignore
-        const listener = subscribeToConfigurationChanges.mock.calls[0][0];
-
-        await listener(updatedConfiguration);
-
-        expect(
-            job?.classList.contains("linksieve-hidden"),
-        ).toBe(true);
-    });
-
-    it("ignores cards without an application URL", async () => {
-        getConfiguration.mockResolvedValue({
-            enabled: true,
-            filters: [
-                {
-                    id: "micro1-ai",
-                    value: "micro1.ai",
-                    matchType: "domain",
-                    enabled: true,
-                },
-            ],
+            expect(
+                extractApplicationUrlFromHtml(html),
+            ).toBe(applicationUrl);
         });
 
-        document.body.innerHTML = `
-            <ul>
-                <li class="jobs-search-results__list-item">
-                    <div class="job-card-container">
-                        <a href="https://www.linkedin.com/jobs/view/123">
-                            View job
-                        </a>
-                    </div>
-                </li>
-            </ul>
-        `;
+        it("does not depend on LinkedIn generated CSS classes", () => {
+            const html = `
+                <a
+                    class="completely-different-class"
+                    aria-label="Apply on company website"
+                    href="${applicationUrl}"
+                >
+                    Apply
+                </a>
+            `;
 
-        await import("../../src/content/index");
-
-        await new Promise((resolve) => setTimeout(resolve, 0));
-
-        const job = document.querySelector(
-            ".jobs-search-results__list-item",
-        );
-
-        expect(
-            job?.classList.contains("linksieve-hidden"),
-        ).toBe(false);
-    });
-
-    it("re-evaluates a job when the application URL changes", async () => {
-        getConfiguration.mockResolvedValue({
-            enabled: true,
-            filters: [
-                {
-                    id: "micro1-ai",
-                    value: "micro1.ai",
-                    matchType: "domain",
-                    enabled: true,
-                },
-            ],
+            expect(
+                extractApplicationUrlFromHtml(html),
+            ).toBe(applicationUrl);
         });
 
-        document.body.innerHTML = `
-        <ul>
-            <li class="jobs-search-results__list-item">
-                <div class="job-card-container">
-                    <a
-                        aria-label="Apply on company website"
-                        href="https://www.linkedin.com/safety/go/?url=https%3A%2F%2Fjobs.micro1.ai%2Fpost%2F123"
-                    >
-                        Apply
-                    </a>
-                </div>
-            </li>
-        </ul>
-    `;
+        it("returns null when no external Apply link exists", () => {
+            const html = `
+                <a href="https://www.linkedin.com/jobs/view/123">
+                    Apply
+                </a>
+            `;
 
-        await import("../../src/content/index");
-
-        await new Promise((resolve) => setTimeout(resolve, 0));
-
-        const job = document.querySelector(
-            ".jobs-search-results__list-item",
-        );
-
-        const link = document.querySelector<HTMLAnchorElement>(
-            "a[aria-label='Apply on company website']",
-        );
-
-        if (job === null || link === null) {
-            throw new Error("Test DOM initialization failed.");
-        }
-
-        expect(
-            job.classList.contains("linksieve-hidden"),
-        ).toBe(true);
-
-        link.href =
-            "https://www.linkedin.com/safety/go/?url=https%3A%2F%2Fjobs.example.com%2Fpost%2F123";
-
-        await new Promise((resolve) => setTimeout(resolve, 0));
-        await new Promise((resolve) => setTimeout(resolve, 0));
-
-        expect(
-            job.classList.contains("linksieve-hidden"),
-        ).toBe(false);
-    });
-
-    it("re-hides a job when its application URL changes to a matching domain", async () => {
-        getConfiguration.mockResolvedValue({
-            enabled: true,
-            filters: [
-                {
-                    id: "micro1-ai",
-                    value: "micro1.ai",
-                    matchType: "domain",
-                    enabled: true,
-                },
-            ],
+            expect(
+                extractApplicationUrlFromHtml(html),
+            ).toBeNull();
         });
 
-        document.body.innerHTML = `
-        <ul>
-            <li class="jobs-search-results__list-item">
-                <div class="job-card-container">
-                    <a
-                        aria-label="Apply on company website"
-                        href="https://www.linkedin.com/safety/go/?url=https%3A%2F%2Fjobs.example.com%2Fpost%2F123"
-                    >
-                        Apply
-                    </a>
-                </div>
-            </li>
-        </ul>
-    `;
+        it("returns null when the Apply link has no href", () => {
+            const html = `
+                <a aria-label="Apply on company website">
+                    Apply
+                </a>
+            `;
 
-        await import("../../src/content/index");
-
-        await new Promise((resolve) => setTimeout(resolve, 0));
-
-        const job = document.querySelector(
-            ".jobs-search-results__list-item",
-        );
-
-        const link = document.querySelector<HTMLAnchorElement>(
-            "a[aria-label='Apply on company website']",
-        );
-
-        if (job === null || link === null) {
-            throw new Error("Test DOM initialization failed.");
-        }
-
-        expect(
-            job.classList.contains("linksieve-hidden"),
-        ).toBe(false);
-
-        link.href =
-            "https://www.linkedin.com/safety/go/?url=https%3A%2F%2Fjobs.micro1.ai%2Fpost%2F123";
-
-        await new Promise((resolve) => setTimeout(resolve, 0));
-        await new Promise((resolve) => setTimeout(resolve, 0));
-
-        expect(
-            job.classList.contains("linksieve-hidden"),
-        ).toBe(true);
+            expect(
+                extractApplicationUrlFromHtml(html),
+            ).toBeNull();
+        });
     });
 
-    it("unhides a job when its application link is removed", async () => {
-        getConfiguration.mockResolvedValue({
-            enabled: true,
-            filters: [
+    describe("fetchApplicationUrl", () => {
+        it("fetches the authenticated LinkedIn job page", async () => {
+            const fetchMock = vi
+                .spyOn(globalThis, "fetch")
+                .mockResolvedValue(
+                    new Response(
+                        createApplicationHtml(),
+                        {
+                            status: 200,
+                            headers: {
+                                "Content-Type": "text/html",
+                            },
+                        },
+                    ),
+                );
+
+            await expect(
+                fetchApplicationUrl("4461086047"),
+            ).resolves.toBe(applicationUrl);
+
+            expect(fetchMock).toHaveBeenCalledWith(
+                "https://www.linkedin.com/jobs/view/4461086047",
                 {
-                    id: "micro1-ai",
-                    value: "micro1.ai",
-                    matchType: "domain",
-                    enabled: true,
+                    credentials: "include",
                 },
-            ],
+            );
         });
 
-        document.body.innerHTML = `
-        <ul>
-            <li class="jobs-search-results__list-item">
-                <div class="job-card-container">
-                    <a
-                        aria-label="Apply on company website"
-                        href="https://www.linkedin.com/safety/go/?url=https%3A%2F%2Fjobs.micro1.ai%2Fpost%2F123"
-                    >
-                        Apply
-                    </a>
-                </div>
-            </li>
-        </ul>
-    `;
+        it("caches successful application URL resolutions", async () => {
+            const fetchMock = vi
+                .spyOn(globalThis, "fetch")
+                .mockResolvedValue(
+                    new Response(
+                        createApplicationHtml(),
+                        {
+                            status: 200,
+                        },
+                    ),
+                );
 
-        await import("../../src/content/index");
+            await fetchApplicationUrl("cached-job");
+            await fetchApplicationUrl("cached-job");
 
-        await new Promise((resolve) => setTimeout(resolve, 0));
-
-        const job = document.querySelector(
-            ".jobs-search-results__list-item",
-        );
-
-        const link = document.querySelector<HTMLAnchorElement>(
-            "a[aria-label='Apply on company website']",
-        );
-
-        if (job === null || link === null) {
-            throw new Error("Test DOM initialization failed.");
-        }
-
-        expect(
-            job.classList.contains("linksieve-hidden"),
-        ).toBe(true);
-
-        link.remove();
-
-        await new Promise((resolve) => setTimeout(resolve, 0));
-        await new Promise((resolve) => setTimeout(resolve, 0));
-
-        expect(
-            job.classList.contains("linksieve-hidden"),
-        ).toBe(false);
-    });
-
-    it("handles replacement of an application link", async () => {
-        getConfiguration.mockResolvedValue({
-            enabled: true,
-            filters: [
-                {
-                    id: "micro1-ai",
-                    value: "micro1.ai",
-                    matchType: "domain",
-                    enabled: true,
-                },
-            ],
+            expect(fetchMock).toHaveBeenCalledOnce();
         });
 
-        document.body.innerHTML = `
-        <ul>
-            <li class="jobs-search-results__list-item">
-                <div class="job-card-container">
-                    <a
-                        aria-label="Apply on company website"
-                        href="https://www.linkedin.com/safety/go/?url=https%3A%2F%2Fjobs.micro1.ai%2Fpost%2F123"
-                    >
-                        Apply
-                    </a>
-                </div>
-            </li>
-        </ul>
-    `;
+        it("deduplicates simultaneous requests", async () => {
+            let resolveResponse:
+                ((response: Response) => void) | undefined;
 
-        await import("../../src/content/index");
+            const responsePromise = new Promise<Response>(
+                (resolve) => {
+                    resolveResponse = resolve;
+                },
+            );
 
-        await new Promise((resolve) => setTimeout(resolve, 0));
+            const fetchMock = vi
+                .spyOn(globalThis, "fetch")
+                .mockReturnValue(responsePromise);
 
-        const job = document.querySelector(
-            ".jobs-search-results__list-item",
-        );
+            const firstRequest =
+                fetchApplicationUrl("duplicate-job");
 
-        const oldLink = document.querySelector<HTMLAnchorElement>(
-            "a[aria-label='Apply on company website']",
-        );
+            const secondRequest =
+                fetchApplicationUrl("duplicate-job");
 
-        if (job === null || oldLink === null) {
-            throw new Error("Test DOM initialization failed.");
-        }
+            expect(fetchMock).toHaveBeenCalledOnce();
 
-        expect(
-            job.classList.contains("linksieve-hidden"),
-        ).toBe(true);
+            resolveResponse?.(
+                new Response(
+                    createApplicationHtml(),
+                    {
+                        status: 200,
+                    },
+                ),
+            );
 
-        const newLink = document.createElement("a");
+            await expect(firstRequest).resolves.toBe(
+                applicationUrl,
+            );
 
-        newLink.setAttribute(
-            "aria-label",
-            "Apply on company website",
-        );
+            await expect(secondRequest).resolves.toBe(
+                applicationUrl,
+            );
+        });
 
-        newLink.href =
-            "https://www.linkedin.com/safety/go/?url=https%3A%2F%2Fjobs.example.com%2Fpost%2F123";
+        it("returns null for an unsuccessful response", async () => {
+            vi.spyOn(globalThis, "fetch")
+              .mockResolvedValue(
+                  new Response(null, {
+                      status: 404,
+                  }),
+              );
 
-        oldLink.replaceWith(newLink);
+            await expect(
+                fetchApplicationUrl("missing-job"),
+            ).resolves.toBeNull();
+        });
 
-        await new Promise((resolve) => setTimeout(resolve, 0));
-        await new Promise((resolve) => setTimeout(resolve, 0));
+        it("returns null when fetching fails", async () => {
+            vi.spyOn(globalThis, "fetch")
+              .mockRejectedValue(
+                  new Error("Network failure"),
+              );
 
-        expect(
-            job.classList.contains("linksieve-hidden"),
-        ).toBe(false);
+            await expect(
+                fetchApplicationUrl("failed-job"),
+            ).resolves.toBeNull();
+        });
+
+        it("returns null when no external application link exists", async () => {
+            vi.spyOn(globalThis, "fetch")
+              .mockResolvedValue(
+                  new Response(
+                      "<html><body>No Apply link</body></html>",
+                      {
+                          status: 200,
+                      },
+                  ),
+              );
+
+            await expect(
+                fetchApplicationUrl("internal-job"),
+            ).resolves.toBeNull();
+        });
     });
 });

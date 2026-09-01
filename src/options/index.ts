@@ -349,14 +349,14 @@ async function initialize(): Promise<void>
     renderConfiguration();
 
     filteringEnabled.addEventListener("change", () => {
-        void handleFilteringEnabledChange(
+        handleFilteringEnabledChange(
             filteringEnabled.checked,
         );
     });
 
     filterForm.addEventListener("submit", (event) => {
-        void handleSubmit(event);
+        handleSubmit(event);
     });
 }
 
-void initialize();
+initialize();

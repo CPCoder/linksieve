@@ -89,4 +89,4 @@ async function initialize(): Promise<void>
     });
 }
 
-void initialize();
+initialize();
