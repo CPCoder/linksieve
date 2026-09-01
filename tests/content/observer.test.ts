@@ -6,10 +6,14 @@
  * Copyright: 2026 SHWorX (Steffen Haase)
  */
 
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ContentObserver } from "../../src/content/observer";
 
 describe("ContentObserver", () => {
+    beforeEach(() => {
+        document.body.innerHTML = "";
+    });
+
     it("processes newly added elements", async () => {
         const handler = vi.fn();
         const observer = new ContentObserver(handler);
@@ -23,6 +27,7 @@ describe("ContentObserver", () => {
         await new Promise((resolve) => setTimeout(resolve, 0));
 
         expect(handler).toHaveBeenCalledWith(element);
+
         observer.stop();
     });
 
@@ -42,30 +47,33 @@ describe("ContentObserver", () => {
 
         expect(handler).toHaveBeenCalledWith(container);
         expect(handler).toHaveBeenCalledWith(link);
+
         observer.stop();
     });
 
-    it("does not process the same element twice", async () => {
+    it("processes an element again when it is reinserted", async () => {
         const handler = vi.fn();
         const observer = new ContentObserver(handler);
 
         observer.start();
 
-        const container = document.createElement("div");
-        const link = document.createElement("a");
+        const element = document.createElement("div");
 
-        container.appendChild(link);
-        document.body.appendChild(container);
+        document.body.appendChild(element);
 
         await new Promise((resolve) => setTimeout(resolve, 0));
 
-        document.body.removeChild(container);
-        document.body.appendChild(container);
+        document.body.removeChild(element);
+        document.body.appendChild(element);
 
         await new Promise((resolve) => setTimeout(resolve, 0));
-        const calls = handler.mock.calls.filter(([element]) => element === link);
 
-        expect(calls).toHaveLength(1);
+        expect(
+            handler.mock.calls.filter(
+                ([value]) => value === element,
+            ),
+        ).toHaveLength(2);
+
         observer.stop();
     });
 
@@ -74,14 +82,19 @@ describe("ContentObserver", () => {
         const observer = new ContentObserver(handler);
 
         observer.start();
-        document.body.appendChild(document.createTextNode("LinkedIn job"));
+
+        document.body.appendChild(
+            document.createTextNode("LinkedIn job"),
+        );
 
         await new Promise((resolve) => setTimeout(resolve, 0));
+
         expect(handler).not.toHaveBeenCalled();
+
         observer.stop();
     });
 
-    it("stops observing mutations", async () => {
+    it("does nothing when the observer is stopped", async () => {
         const handler = vi.fn();
         const observer = new ContentObserver(handler);
 
@@ -89,7 +102,9 @@ describe("ContentObserver", () => {
         observer.stop();
 
         document.body.appendChild(document.createElement("div"));
+
         await new Promise((resolve) => setTimeout(resolve, 0));
+
         expect(handler).not.toHaveBeenCalled();
     });
 });

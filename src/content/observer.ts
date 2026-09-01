@@ -12,8 +12,6 @@ export class ContentObserver
 {
     private readonly observer: MutationObserver;
 
-    private readonly processedElements = new WeakSet<Element>();
-
     public constructor(private readonly handler: ElementHandler)
     {
         this.observer = new MutationObserver((mutations) => this.handleMutations(mutations));
@@ -21,6 +19,10 @@ export class ContentObserver
 
     public start(): void
     {
+        if (document.body === null) {
+            return;
+        }
+
         this.observer.observe(document.body, { childList: true, subtree: true });
     }
 
@@ -37,22 +39,12 @@ export class ContentObserver
                     continue;
                 }
 
-                this.processElement(node);
+                this.handler(node);
 
                 for (const element of node.querySelectorAll("*")) {
-                    this.processElement(element);
+                    this.handler(element);
                 }
             }
         }
-    }
-
-    private processElement(element: Element): void
-    {
-        if (this.processedElements.has(element)) {
-            return;
-        }
-
-        this.processedElements.add(element);
-        this.handler(element);
     }
 }
