@@ -2,16 +2,38 @@
 <html lang="en">
     <head>
         <meta charset="utf-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta
+                name="viewport"
+                content="width=device-width, initial-scale=1.0"
+        >
         <title>LinkSieve</title>
-        <link rel="stylesheet" href="styles.css">
+        <link rel="stylesheet" href="./styles.css">
     </head>
     <body>
-        <main>
-            <h1>LinkSieve</h1>
-            <p id="status">Loading...</p>
-            <button id="options" type="button">Options</button>
+        <main class="popup">
+            <header class="popup__header">
+                <h1>LinkSieve</h1>
+                <span id="status" class="status"></span>
+            </header>
+
+            <section class="summary">
+                <span class="summary__label">Filtering</span>
+                <strong id="filtering-state">Loading...</strong>
+            </section>
+
+            <section class="summary">
+                <span class="summary__label">Active filters</span>
+                <strong id="filter-count">0</strong>
+            </section>
+
+            <label class="switch-row">
+                <span>Enable filtering</span>
+                <input id="filtering-enabled" type="checkbox">
+            </label>
+
+            <button id="options-button" type="button">Open options</button>
         </main>
-        <script type="module" src="index.js"></script>
+
+        <script type="module" src="./index.ts"></script>
     </body>
 </html>

@@ -1,16 +1,75 @@
 <!doctype html>
 <html lang="en">
     <head>
-        <meta charset="utf-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>LinkSieve Options</title>
-        <link rel="stylesheet" href="styles.css">
+        <link rel="stylesheet" href="./styles.css">
     </head>
     <body>
-        <main>
-            <h1>LinkSieve Options</h1>
-            <p>Filter configuration will be available here.</p>
-        </main>
-        <script type="module" src="index.js"></script>
+    <main class="options">
+        <header class="options__header">
+            <h1>LinkSieve</h1>
+            <p>Configure which external job application URLs should be filtered.</p>
+        </header>
+
+        <section class="panel">
+            <div class="panel__header">
+                <div>
+                    <h2>Filtering</h2>
+                    <p>Enable or disable LinkSieve globally.</p>
+                </div>
+
+                <label class="switch">
+                    <input id="filtering-enabled" type="checkbox">
+                    <span class="switch__slider"></span>
+                    <span class="visually-hidden">Enable filtering</span>
+                </label>
+            </div>
+        </section>
+
+        <section class="panel">
+            <div class="panel__header">
+                <div>
+                    <h2>Filters</h2>
+                    <p>Jobs matching an enabled filter will be hidden.</p>
+                </div>
+            </div>
+
+            <form id="filter-form" class="filter-form">
+                <div class="filter-form__row">
+                    <label for="filter-value">Value</label>
+                    <input
+                            id="filter-value"
+                            name="value"
+                            type="text"
+                            autocomplete="off"
+                            placeholder="micro1.ai"
+                            required
+                    >
+                </div>
+
+                <div class="filter-form__row">
+                    <label for="filter-match-type">Match type</label>
+                    <select id="filter-match-type" name="matchType">
+                        <option value="domain">Domain</option>
+                        <option value="url">Exact URL</option>
+                    </select>
+                </div>
+
+                <button type="submit">Add filter</button>
+            </form>
+
+            <p id="form-error" class="message message--error" hidden></p>
+
+            <div id="filter-list" class="filter-list"></div>
+        </section>
+
+        <p id="save-message" class="message message--success" hidden>
+            Settings saved.
+        </p>
+    </main>
+
+    <script type="module" src="./index.ts"></script>
     </body>
 </html>
