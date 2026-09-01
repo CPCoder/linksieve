@@ -6,16 +6,21 @@
  * Copyright: 2026 SHWorX (Steffen Haase)
  */
 
-import { getConfiguration } from "../shared/storage";
+import {
+    getConfiguration,
+    subscribeToConfigurationChanges,
+} from "../shared/storage";
 import {
     extractLinkedInJobId,
-    resolveExternalApplicationUrl,
     matchesConfiguration,
+    resolveExternalApplicationUrl,
 } from "../shared/url";
 import { debug } from "../shared/logger";
 import { ContentObserver } from "./observer";
 
-const APPLICATION_LINK_SELECTOR = "a[aria-label*='Apply on company website' i], a[href*='/safety/go/?url=']";
+const APPLICATION_LINK_SELECTOR =
+    "a[aria-label*='Apply on company website' i], " +
+    "a[href*='/safety/go/?url=']";
 
 const JOB_CONTAINER_SELECTORS = [
     "li.jobs-search-results__list-item",
@@ -59,13 +64,17 @@ function findApplicationLink(
     container: Element,
 ): HTMLAnchorElement | null
 {
-    const link = container.querySelector<HTMLAnchorElement>(APPLICATION_LINK_SELECTOR);
+    return container.querySelector<HTMLAnchorElement>(
+        APPLICATION_LINK_SELECTOR,
+    );
+}
 
-    if (link === null) {
-        return null;
-    }
-
-    return link;
+function setJobVisibility(
+    container: Element,
+    hidden: boolean,
+): void
+{
+    container.classList.toggle(HIDDEN_CLASS, hidden);
 }
 
 function filterJob(
@@ -74,9 +83,12 @@ function filterJob(
     jobId: string | null,
 ): void
 {
-    container.classList.add(HIDDEN_CLASS);
-    container.setAttribute(PROCESSED_ATTRIBUTE, "true");
-    debug("LinkedIn job filtered.", { jobId, applicationUrl });
+    setJobVisibility(container, true);
+
+    debug("LinkedIn job filtered.", {
+        jobId,
+        applicationUrl,
+    });
 }
 
 function markProcessed(container: Element): void
@@ -84,9 +96,56 @@ function markProcessed(container: Element): void
     container.setAttribute(PROCESSED_ATTRIBUTE, "true");
 }
 
+function clearProcessed(container: Element): void
+{
+    container.removeAttribute(PROCESSED_ATTRIBUTE);
+}
+
 function isProcessed(container: Element): boolean
 {
     return container.getAttribute(PROCESSED_ATTRIBUTE) === "true";
+}
+
+async function evaluateJobContainer(
+    container: Element,
+    configuration: Awaited<ReturnType<typeof getConfiguration>>,
+): Promise<void>
+{
+    const applicationLink = findApplicationLink(container);
+
+    if (applicationLink === null) {
+        setJobVisibility(container, false);
+        markProcessed(container);
+        return;
+    }
+
+    const applicationUrl = getApplicationUrl(applicationLink);
+
+    if (applicationUrl === null) {
+        setJobVisibility(container, false);
+        markProcessed(container);
+        return;
+    }
+
+    const matches = matchesConfiguration(
+        applicationUrl,
+        configuration,
+    );
+
+    const jobId = extractLinkedInJobId(
+        window.location.href,
+    );
+
+    setJobVisibility(container, matches);
+    markProcessed(container);
+
+    if (matches) {
+        filterJob(
+            container,
+            applicationUrl,
+            jobId,
+        );
+    }
 }
 
 async function processJobContainer(
@@ -97,30 +156,12 @@ async function processJobContainer(
         return;
     }
 
-    const applicationLink = findApplicationLink(container);
-
-    if (applicationLink === null) {
-        return;
-    }
-
-    const applicationUrl = getApplicationUrl(applicationLink);
-
-    if (applicationUrl === null) {
-        markProcessed(container);
-        return;
-    }
-
     const configuration = await getConfiguration();
-    const matches = matchesConfiguration(applicationUrl, configuration);
-    const jobId = extractLinkedInJobId(window.location.href);
 
-    markProcessed(container);
-
-    if (!matches) {
-        return;
-    }
-
-    filterJob(container, applicationUrl, jobId);
+    await evaluateJobContainer(
+        container,
+        configuration,
+    );
 }
 
 async function processElement(element: Element): Promise<void>
@@ -135,7 +176,9 @@ async function processElement(element: Element): Promise<void>
         return;
     }
 
-    const applicationLink = element.querySelector<HTMLAnchorElement>(APPLICATION_LINK_SELECTOR);
+    const applicationLink = element.querySelector<HTMLAnchorElement>(
+        APPLICATION_LINK_SELECTOR,
+    );
 
     if (applicationLink === null) {
         return;
@@ -150,7 +193,9 @@ async function processElement(element: Element): Promise<void>
 
 async function inspectExistingJobs(): Promise<void>
 {
-    const links = document.querySelectorAll<HTMLAnchorElement>(APPLICATION_LINK_SELECTOR);
+    const links = document.querySelectorAll<HTMLAnchorElement>(
+        APPLICATION_LINK_SELECTOR,
+    );
 
     for (const link of links) {
         const container = findJobContainer(link);
@@ -161,9 +206,43 @@ async function inspectExistingJobs(): Promise<void>
     }
 }
 
+async function reprocessExistingJobs(
+    configuration: Awaited<ReturnType<typeof getConfiguration>>,
+): Promise<void>
+{
+    const links = document.querySelectorAll<HTMLAnchorElement>(
+        APPLICATION_LINK_SELECTOR,
+    );
+
+    const containers = new Set<Element>();
+
+    for (const link of links) {
+        const container = findJobContainer(link);
+
+        if (container !== null) {
+            containers.add(container);
+        }
+    }
+
+    for (const container of containers) {
+        clearProcessed(container);
+
+        await evaluateJobContainer(
+            container,
+            configuration,
+        );
+    }
+}
+
 async function initialize(): Promise<void>
 {
     await inspectExistingJobs();
+
+    subscribeToConfigurationChanges(
+        async (configuration) => {
+            await reprocessExistingJobs(configuration);
+        },
+    );
 
     const observer = new ContentObserver((element) => {
         void processElement(element);

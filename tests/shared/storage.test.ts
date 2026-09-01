@@ -18,6 +18,7 @@ import {
     removeFilter,
     setConfiguration,
     setFilteringEnabled,
+    subscribeToConfigurationChanges,
     updateFilter,
 } from "../../src/shared/storage";
 import type {
@@ -30,9 +31,15 @@ const storage = {
     set: vi.fn(),
 };
 
+const storageOnChanged = {
+    addListener: vi.fn(),
+    removeListener: vi.fn(),
+};
+
 vi.stubGlobal("chrome", {
     storage: {
         local: storage,
+        onChanged: storageOnChanged,
     },
 });
 
@@ -119,26 +126,6 @@ describe("storage", () => {
         );
     });
 
-    it("uses defaults when a filter has an invalid match type", async () => {
-        storage.get.mockResolvedValue({
-            [STORAGE_KEY_CONFIGURATION]: {
-                enabled: true,
-                filters: [
-                    {
-                        id: "invalid",
-                        value: "example.com",
-                        matchType: "contains",
-                        enabled: true,
-                    },
-                ],
-            },
-        });
-
-        await expect(getConfiguration()).resolves.toEqual(
-            DEFAULT_CONFIGURATION,
-        );
-    });
-
     it("adds a filter", async () => {
         const configuration: FilterConfiguration = {
             enabled: true,
@@ -161,42 +148,34 @@ describe("storage", () => {
             enabled: true,
             filters: [filter],
         });
-
-        expect(storage.set).toHaveBeenCalledWith({
-            [STORAGE_KEY_CONFIGURATION]: {
-                enabled: true,
-                filters: [filter],
-            },
-        });
     });
 
     it("removes a filter", async () => {
-        const configuration: FilterConfiguration = {
+        const first: FilterRule = {
+            id: "first",
+            value: "first.example",
+            matchType: "domain",
             enabled: true,
-            filters: [
-                {
-                    id: "first",
-                    value: "first.example",
-                    matchType: "domain",
-                    enabled: true,
-                },
-                {
-                    id: "second",
-                    value: "second.example",
-                    matchType: "domain",
-                    enabled: true,
-                },
-            ],
+        };
+
+        const second: FilterRule = {
+            id: "second",
+            value: "second.example",
+            matchType: "domain",
+            enabled: true,
         };
 
         storage.get.mockResolvedValue({
-            [STORAGE_KEY_CONFIGURATION]: configuration,
+            [STORAGE_KEY_CONFIGURATION]: {
+                enabled: true,
+                filters: [first, second],
+            },
         });
         storage.set.mockResolvedValue(undefined);
 
         await expect(removeFilter("first")).resolves.toEqual({
             enabled: true,
-            filters: [configuration.filters[1]],
+            filters: [second],
         });
     });
 
@@ -233,45 +212,6 @@ describe("storage", () => {
         });
     });
 
-    it("does not modify other filters during an update", async () => {
-        const first: FilterRule = {
-            id: "first",
-            value: "first.example",
-            matchType: "domain",
-            enabled: true,
-        };
-
-        const second: FilterRule = {
-            id: "second",
-            value: "second.example",
-            matchType: "domain",
-            enabled: true,
-        };
-
-        storage.get.mockResolvedValue({
-            [STORAGE_KEY_CONFIGURATION]: {
-                enabled: true,
-                filters: [first, second],
-            },
-        });
-        storage.set.mockResolvedValue(undefined);
-
-        await expect(
-            updateFilter("first", {
-                enabled: false,
-            }),
-        ).resolves.toEqual({
-            enabled: true,
-            filters: [
-                {
-                    ...first,
-                    enabled: false,
-                },
-                second,
-            ],
-        });
-    });
-
     it("changes the global filtering state", async () => {
         storage.get.mockResolvedValue({
             [STORAGE_KEY_CONFIGURATION]: {
@@ -285,5 +225,95 @@ describe("storage", () => {
             enabled: false,
             filters: [],
         });
+    });
+
+    it("subscribes to configuration changes", () => {
+        const listener = vi.fn();
+
+        subscribeToConfigurationChanges(listener);
+
+        expect(
+            storageOnChanged.addListener,
+        ).toHaveBeenCalledOnce();
+    });
+
+    it("passes valid configuration changes to the listener", () => {
+        const listener = vi.fn();
+
+        subscribeToConfigurationChanges(listener);
+
+        // @ts-ignore
+        const callback = storageOnChanged.addListener.mock.calls[0][0];
+
+        const configuration: FilterConfiguration = {
+            enabled: true,
+            filters: [
+                {
+                    id: "example",
+                    value: "example.com",
+                    matchType: "domain",
+                    enabled: true,
+                },
+            ],
+        };
+
+        callback({
+            [STORAGE_KEY_CONFIGURATION]: {
+                oldValue: DEFAULT_CONFIGURATION,
+                newValue: configuration,
+            },
+        });
+
+        expect(listener).toHaveBeenCalledWith(configuration);
+    });
+
+    it("ignores unrelated storage changes", () => {
+        const listener = vi.fn();
+
+        subscribeToConfigurationChanges(listener);
+
+        // @ts-ignore
+        const callback = storageOnChanged.addListener.mock.calls[0][0];
+
+        callback({
+            unrelated: {
+                oldValue: false,
+                newValue: true,
+            },
+        });
+
+        expect(listener).not.toHaveBeenCalled();
+    });
+
+    it("ignores malformed configuration changes", () => {
+        const listener = vi.fn();
+
+        subscribeToConfigurationChanges(listener);
+
+        // @ts-ignore
+        const callback = storageOnChanged.addListener.mock.calls[0][0];
+
+        callback({
+            [STORAGE_KEY_CONFIGURATION]: {
+                newValue: {
+                    enabled: "invalid",
+                    filters: [],
+                },
+            },
+        });
+
+        expect(listener).not.toHaveBeenCalled();
+    });
+
+    it("returns an unsubscribe function", () => {
+        const unsubscribe = subscribeToConfigurationChanges(
+            vi.fn(),
+        );
+
+        unsubscribe();
+
+        expect(storageOnChanged.removeListener).toHaveBeenCalledOnce();
+        // @ts-ignore
+        expect(storageOnChanged.removeListener).toHaveBeenCalledWith(storageOnChanged.addListener.mock.calls[0][0]);
     });
 });

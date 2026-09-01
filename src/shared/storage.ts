@@ -35,10 +35,10 @@ function isFilterRule(value: unknown): value is FilterRule
     const rule = value as Partial<FilterRule>;
 
     return (
-        typeof rule.id === "string"
-        && typeof rule.value === "string"
-        && (rule.matchType === "domain" || rule.matchType === "url")
-        && typeof rule.enabled === "boolean"
+        typeof rule.id === "string" &&
+        typeof rule.value === "string" &&
+        (rule.matchType === "domain" || rule.matchType === "url") &&
+        typeof rule.enabled === "boolean"
     );
 }
 
@@ -53,15 +53,17 @@ function isFilterConfiguration(
     const configuration = value as Partial<FilterConfiguration>;
 
     return (
-        typeof configuration.enabled === "boolean"
-        && Array.isArray(configuration.filters)
-        && configuration.filters.every(isFilterRule)
+        typeof configuration.enabled === "boolean" &&
+        Array.isArray(configuration.filters) &&
+        configuration.filters.every(isFilterRule)
     );
 }
 
 export async function getConfiguration(): Promise<FilterConfiguration>
 {
-    const data = await getStorageArea().get(STORAGE_KEY_CONFIGURATION) as StorageData;
+    const data = await getStorageArea().get(
+        STORAGE_KEY_CONFIGURATION,
+    ) as StorageData;
 
     if (!isFilterConfiguration(data.configuration)) {
         return cloneDefaultConfiguration();
@@ -74,12 +76,16 @@ export async function setConfiguration(
     configuration: FilterConfiguration,
 ): Promise<void>
 {
-    await getStorageArea().set({ [STORAGE_KEY_CONFIGURATION]: configuration });
+    await getStorageArea().set({
+        [STORAGE_KEY_CONFIGURATION]: configuration,
+    });
 }
 
 export async function initializeStorage(): Promise<void>
 {
-    const data = await getStorageArea().get(STORAGE_KEY_CONFIGURATION) as StorageData;
+    const data = await getStorageArea().get(
+        STORAGE_KEY_CONFIGURATION,
+    ) as StorageData;
 
     if (!isFilterConfiguration(data.configuration)) {
         await setConfiguration(cloneDefaultConfiguration());
@@ -94,7 +100,10 @@ export async function addFilter(
 
     const updatedConfiguration: FilterConfiguration = {
         ...configuration,
-        filters: [...configuration.filters, filter],
+        filters: [
+            ...configuration.filters,
+            filter,
+        ],
     };
 
     await setConfiguration(updatedConfiguration);
@@ -110,7 +119,9 @@ export async function removeFilter(
 
     const updatedConfiguration: FilterConfiguration = {
         ...configuration,
-        filters: configuration.filters.filter((filter) => filter.id !== filterId),
+        filters: configuration.filters.filter(
+            (filter) => filter.id !== filterId,
+        ),
     };
 
     await setConfiguration(updatedConfiguration);
@@ -128,7 +139,9 @@ export async function updateFilter(
     const updatedConfiguration: FilterConfiguration = {
         ...configuration,
         filters: configuration.filters.map((filter) =>
-            filter.id === filterId ? { ...filter, ...update } : filter,
+            filter.id === filterId
+            ? { ...filter, ...update }
+            : filter,
         ),
     };
 
@@ -151,4 +164,33 @@ export async function setFilteringEnabled(
     await setConfiguration(updatedConfiguration);
 
     return updatedConfiguration;
+}
+
+export function subscribeToConfigurationChanges(
+    listener: (
+        configuration: FilterConfiguration,
+    ) => void | Promise<void>,
+): () => void
+{
+    const handleChange = (
+        changes: Record<string, chrome.storage.StorageChange>,
+    ): void => {
+        const change = changes[STORAGE_KEY_CONFIGURATION];
+
+        if (change === undefined) {
+            return;
+        }
+
+        if (!isFilterConfiguration(change.newValue)) {
+            return;
+        }
+
+        void listener(change.newValue);
+    };
+
+    chrome.storage.onChanged.addListener(handleChange);
+
+    return () => {
+        chrome.storage.onChanged.removeListener(handleChange);
+    };
 }
