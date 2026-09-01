@@ -7,7 +7,16 @@
  */
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { ContentObserver } from "../../src/content/observer";
+import {
+    ContentObserver,
+} from "../../src/content/observer";
+
+function flushMutations(): Promise<void>
+{
+    return new Promise((resolve) => {
+        setTimeout(resolve, 0);
+    });
+}
 
 describe("ContentObserver", () => {
     beforeEach(() => {
@@ -24,7 +33,7 @@ describe("ContentObserver", () => {
 
         document.body.appendChild(element);
 
-        await new Promise((resolve) => setTimeout(resolve, 0));
+        await flushMutations();
 
         expect(handler).toHaveBeenCalledWith(element);
 
@@ -43,10 +52,139 @@ describe("ContentObserver", () => {
         container.appendChild(link);
         document.body.appendChild(container);
 
-        await new Promise((resolve) => setTimeout(resolve, 0));
+        await flushMutations();
 
         expect(handler).toHaveBeenCalledWith(container);
         expect(handler).toHaveBeenCalledWith(link);
+
+        observer.stop();
+    });
+
+    it("processes deeply nested descendants", async () => {
+        const handler = vi.fn();
+        const observer = new ContentObserver(handler);
+
+        observer.start();
+
+        const container = document.createElement("div");
+        const article = document.createElement("article");
+        const link = document.createElement("a");
+
+        article.appendChild(link);
+        container.appendChild(article);
+        document.body.appendChild(container);
+
+        await flushMutations();
+
+        expect(handler).toHaveBeenCalledWith(container);
+        expect(handler).toHaveBeenCalledWith(article);
+        expect(handler).toHaveBeenCalledWith(link);
+
+        observer.stop();
+    });
+
+    it("deduplicates elements within a mutation batch", async () => {
+        const handler = vi.fn();
+        const observer = new ContentObserver(handler);
+
+        observer.start();
+
+        const container = document.createElement("div");
+        const link = document.createElement("a");
+
+        container.appendChild(link);
+        document.body.appendChild(container);
+
+        link.setAttribute("aria-label", "Apply on company website");
+
+        await flushMutations();
+
+        expect(
+            handler.mock.calls.filter(
+                ([value]) => value === container,
+            ),
+        ).toHaveLength(1);
+
+        expect(
+            handler.mock.calls.filter(
+                ([value]) => value === link,
+            ),
+        ).toHaveLength(1);
+
+        observer.stop();
+    });
+
+    it("processes elements when observed attributes change", async () => {
+        const handler = vi.fn();
+        const observer = new ContentObserver(handler);
+
+        observer.start();
+
+        const link = document.createElement("a");
+
+        document.body.appendChild(link);
+
+        await flushMutations();
+
+        handler.mockClear();
+
+        link.setAttribute(
+            "href",
+            "https://www.linkedin.com/safety/go/?url=https%3A%2F%2Fmicro1.ai",
+        );
+
+        await flushMutations();
+
+        expect(handler).toHaveBeenCalledWith(link);
+
+        observer.stop();
+    });
+
+    it("processes aria-label changes", async () => {
+        const handler = vi.fn();
+        const observer = new ContentObserver(handler);
+
+        observer.start();
+
+        const link = document.createElement("a");
+
+        document.body.appendChild(link);
+
+        await flushMutations();
+
+        handler.mockClear();
+
+        link.setAttribute(
+            "aria-label",
+            "Apply on company website",
+        );
+
+        await flushMutations();
+
+        expect(handler).toHaveBeenCalledWith(link);
+
+        observer.stop();
+    });
+
+    it("ignores changes to unrelated attributes", async () => {
+        const handler = vi.fn();
+        const observer = new ContentObserver(handler);
+
+        observer.start();
+
+        const element = document.createElement("div");
+
+        document.body.appendChild(element);
+
+        await flushMutations();
+
+        handler.mockClear();
+
+        element.setAttribute("class", "job-card");
+
+        await flushMutations();
+
+        expect(handler).not.toHaveBeenCalled();
 
         observer.stop();
     });
@@ -61,12 +199,12 @@ describe("ContentObserver", () => {
 
         document.body.appendChild(element);
 
-        await new Promise((resolve) => setTimeout(resolve, 0));
+        await flushMutations();
 
         document.body.removeChild(element);
         document.body.appendChild(element);
 
-        await new Promise((resolve) => setTimeout(resolve, 0));
+        await flushMutations();
 
         expect(
             handler.mock.calls.filter(
@@ -87,7 +225,7 @@ describe("ContentObserver", () => {
             document.createTextNode("LinkedIn job"),
         );
 
-        await new Promise((resolve) => setTimeout(resolve, 0));
+        await flushMutations();
 
         expect(handler).not.toHaveBeenCalled();
 
@@ -101,10 +239,34 @@ describe("ContentObserver", () => {
         observer.start();
         observer.stop();
 
-        document.body.appendChild(document.createElement("div"));
+        document.body.appendChild(
+            document.createElement("div"),
+        );
 
-        await new Promise((resolve) => setTimeout(resolve, 0));
+        await flushMutations();
 
         expect(handler).not.toHaveBeenCalled();
+    });
+
+    it("does nothing when the document body does not exist", async () => {
+        const handler = vi.fn();
+        const observer = new ContentObserver(handler);
+
+        document.body.remove();
+
+        observer.start();
+
+        const element = document.createElement("div");
+
+        element.setAttribute(
+            "aria-label",
+            "Apply on company website",
+        );
+
+        await flushMutations();
+
+        expect(handler).not.toHaveBeenCalled();
+
+        observer.stop();
     });
 });
