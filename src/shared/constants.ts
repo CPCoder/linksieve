@@ -6,7 +6,7 @@
  * Copyright: 2026 SHWorX (Steffen Haase)
  */
 
-import type { FilterConfiguration } from "./types";
+import type { FilterConfiguration } from "./types.js";
 
 export const EXTENSION_NAME = "LinkSieve";
 export const EXTENSION_VERSION = "0.1.0";

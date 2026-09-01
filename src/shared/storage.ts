@@ -9,12 +9,12 @@
 import {
     DEFAULT_CONFIGURATION,
     STORAGE_KEY_CONFIGURATION,
-} from "./constants";
+} from "./constants.js";
 import type {
     FilterConfiguration,
     FilterRule,
     StorageData,
-} from "./types";
+} from "./types.js";
 
 function getStorageArea(): chrome.storage.StorageArea
 {

@@ -12,17 +12,17 @@ import {
     removeFilter,
     setFilteringEnabled,
     updateFilter,
-} from "../shared/storage";
+} from "../shared/storage.js";
 import type {
     FilterConfiguration,
     FilterMatchType,
     FilterRule,
-} from "../shared/types";
+} from "../shared/types.js";
 import {
     // getDomain,
     normalizeDomain,
     normalizeUrl,
-} from "../shared/url";
+} from "../shared/url.js";
 
 const filteringEnabled = document.querySelector<HTMLInputElement>(
     "#filtering-enabled",

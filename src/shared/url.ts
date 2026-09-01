@@ -9,7 +9,7 @@
 import type {
     FilterConfiguration,
     FilterRule,
-} from "./types";
+} from "./types.js";
 
 const LINKEDIN_HOST = "www.linkedin.com";
 const LINKEDIN_SAFETY_PATH = "/safety/go/";

@@ -6,8 +6,8 @@
  * Copyright: 2026 SHWorX (Steffen Haase)
  */
 
-import { initializeStorage } from "../shared/storage";
-import { info } from "../shared/logger";
+import { initializeStorage } from "../shared/storage.js";
+import { info } from "../shared/logger.js";
 
 chrome.runtime.onInstalled.addListener(async () => {
     await initializeStorage();

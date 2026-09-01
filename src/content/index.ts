@@ -9,14 +9,14 @@
 import {
     getConfiguration,
     subscribeToConfigurationChanges,
-} from "../shared/storage";
+} from "../shared/storage.js";
 import {
     extractLinkedInJobId,
     matchesConfiguration,
     resolveExternalApplicationUrl,
-} from "../shared/url";
-import { debug } from "../shared/logger";
-import { ContentObserver } from "./observer";
+} from "../shared/url.js";
+import { debug } from "../shared/logger.js";
+import { ContentObserver } from "./observer.js";
 
 const APPLICATION_LINK_SELECTOR =
     "a[aria-label*='Apply on company website' i], " +

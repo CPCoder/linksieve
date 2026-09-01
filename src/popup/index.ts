@@ -10,8 +10,8 @@ import {
     getConfiguration,
     setFilteringEnabled,
     subscribeToConfigurationChanges,
-} from "../shared/storage";
-import type { FilterConfiguration } from "../shared/types";
+} from "../shared/storage.js";
+import type { FilterConfiguration } from "../shared/types.js";
 
 const filteringState = document.querySelector<HTMLElement>("#filtering-state");
 const filterCount = document.querySelector<HTMLElement>("#filter-count");
