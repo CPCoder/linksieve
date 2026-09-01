@@ -37,7 +37,10 @@ const HIDDEN_CLASS = "linksieve-hidden";
 const PROCESSED_ATTRIBUTE = "data-linksieve-processed";
 
 const applicationUrlCache = new Map<string, string>();
-const applicationUrlRequests = new Map<string, Promise<string | null>>();
+const applicationUrlRequests = new Map<
+    string,
+    Promise<string | null>
+>();
 
 function findJobContainer(
     element: Element,
@@ -129,15 +132,19 @@ export async function fetchApplicationUrl(
             );
 
             if (!response.ok) {
-                debug("Failed to fetch LinkedIn job page.", {
-                    jobId,
-                    status: response.status,
-                });
+                debug(
+                    "Failed to fetch LinkedIn job page.",
+                    {
+                        jobId,
+                        status: response.status,
+                    },
+                );
 
                 return null;
             }
 
             const html = await response.text();
+
             const applicationUrl =
                 extractApplicationUrlFromHtml(html);
 
@@ -150,10 +157,13 @@ export async function fetchApplicationUrl(
 
             return applicationUrl;
         } catch (error) {
-            debug("Failed to resolve LinkedIn application URL.", {
-                jobId,
-                error,
-            });
+            debug(
+                "Failed to resolve LinkedIn application URL.",
+                {
+                    jobId,
+                    error,
+                },
+            );
 
             return null;
         } finally {
@@ -161,7 +171,10 @@ export async function fetchApplicationUrl(
         }
     })();
 
-    applicationUrlRequests.set(jobId, request);
+    applicationUrlRequests.set(
+        jobId,
+        request,
+    );
 
     return request;
 }
@@ -171,7 +184,10 @@ function setJobVisibility(
     hidden: boolean,
 ): void
 {
-    container.classList.toggle(HIDDEN_CLASS, hidden);
+    container.classList.toggle(
+        HIDDEN_CLASS,
+        hidden,
+    );
 }
 
 function markProcessed(
@@ -188,7 +204,9 @@ function clearProcessed(
     container: Element,
 ): void
 {
-    container.removeAttribute(PROCESSED_ATTRIBUTE);
+    container.removeAttribute(
+        PROCESSED_ATTRIBUTE,
+    );
 }
 
 function isProcessed(
@@ -208,16 +226,25 @@ async function evaluateJobContainer(
     const jobId = extractJobIdFromContainer(container);
 
     if (jobId === null) {
-        setJobVisibility(container, false);
+        setJobVisibility(
+            container,
+            false,
+        );
+
         markProcessed(container);
 
         return;
     }
 
-    const applicationUrl = await fetchApplicationUrl(jobId);
+    const applicationUrl =
+        await fetchApplicationUrl(jobId);
 
     if (applicationUrl === null) {
-        setJobVisibility(container, false);
+        setJobVisibility(
+            container,
+            false,
+        );
+
         markProcessed(container);
 
         return;
@@ -228,14 +255,21 @@ async function evaluateJobContainer(
         configuration,
     );
 
-    setJobVisibility(container, matches);
+    setJobVisibility(
+        container,
+        matches,
+    );
+
     markProcessed(container);
 
     if (matches) {
-        debug("LinkedIn job filtered.", {
-            jobId,
-            applicationUrl,
-        });
+        debug(
+            "LinkedIn job filtered.",
+            {
+                jobId,
+                applicationUrl,
+            },
+        );
     }
 }
 
@@ -280,8 +314,9 @@ async function inspectExistingJobs(): Promise<void>
     const containers = findJobContainers();
 
     await Promise.all(
-        [...containers].map((container) =>
-            processJobContainer(container),
+        [...containers].map(
+            (container) =>
+                processJobContainer(container),
         ),
     );
 }
@@ -293,14 +328,16 @@ async function reprocessExistingJobs(
     const containers = findJobContainers();
 
     await Promise.all(
-        [...containers].map(async (container) => {
-            clearProcessed(container);
+        [...containers].map(
+            async (container) => {
+                clearProcessed(container);
 
-            await evaluateJobContainer(
-                container,
-                configuration,
-            );
-        }),
+                await evaluateJobContainer(
+                    container,
+                    configuration,
+                );
+            },
+        ),
     );
 }
 
@@ -308,19 +345,23 @@ async function processElement(
     element: Element,
 ): Promise<void>
 {
-    const directContainer = findJobContainer(element);
+    const directContainer =
+        findJobContainer(element);
 
     if (directContainer !== null) {
         clearProcessed(directContainer);
 
-        await processJobContainer(directContainer);
+        await processJobContainer(
+            directContainer,
+        );
 
         return;
     }
 
-    const jobLink = element.matches(JOB_LINK_SELECTOR)
-                    ? element
-                    : element.querySelector<HTMLAnchorElement>(
+    const jobLink =
+        element.matches(JOB_LINK_SELECTOR)
+        ? element
+        : element.querySelector<HTMLAnchorElement>(
             JOB_LINK_SELECTOR,
         );
 
@@ -328,7 +369,8 @@ async function processElement(
         return;
     }
 
-    const container = findJobContainer(jobLink);
+    const container =
+        findJobContainer(jobLink);
 
     if (container === null) {
         return;
@@ -345,13 +387,17 @@ async function initialize(): Promise<void>
 
     subscribeToConfigurationChanges(
         async (configuration) => {
-            await reprocessExistingJobs(configuration);
+            await reprocessExistingJobs(
+                configuration,
+            );
         },
     );
 
-    const observer = new ContentObserver((element) => {
-        void processElement(element);
-    });
+    const observer = new ContentObserver(
+        (element) => {
+            void processElement(element);
+        },
+    );
 
     observer.start();
 }
@@ -361,13 +407,13 @@ if (typeof chrome !== "undefined") {
         document.addEventListener(
             "DOMContentLoaded",
             () => {
-                initialize();
+                void initialize();
             },
             {
                 once: true,
             },
         );
     } else {
-        initialize();
+        void initialize();
     }
 }
