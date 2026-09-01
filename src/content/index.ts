@@ -2,7 +2,7 @@
  * Project:   LinkSieve
  * File:      index.ts
  * Date:      2026-09-01
- * Author:    Steffen Haase <shworx.development@gmail.com
+ * Author:    Steffen Haase <shworx.development@gmail.com>
  * Copyright: 2026 SHWorX (Steffen Haase)
  */
 
@@ -116,6 +116,7 @@ async function evaluateJobContainer(
     if (applicationLink === null) {
         setJobVisibility(container, false);
         markProcessed(container);
+
         return;
     }
 
@@ -124,6 +125,7 @@ async function evaluateJobContainer(
     if (applicationUrl === null) {
         setJobVisibility(container, false);
         markProcessed(container);
+
         return;
     }
 
@@ -150,9 +152,10 @@ async function evaluateJobContainer(
 
 async function processJobContainer(
     container: Element,
+    force = false,
 ): Promise<void>
 {
-    if (isProcessed(container)) {
+    if (!force && isProcessed(container)) {
         return;
     }
 
@@ -164,14 +167,29 @@ async function processJobContainer(
     );
 }
 
+/**
+ * Process an element affected by a DOM mutation.
+ */
 async function processElement(element: Element): Promise<void>
 {
     if (element.matches(APPLICATION_LINK_SELECTOR)) {
         const container = findJobContainer(element);
 
         if (container !== null) {
+            clearProcessed(container);
+
             await processJobContainer(container);
         }
+
+        return;
+    }
+
+    const container = findJobContainer(element);
+
+    if (container !== null) {
+        clearProcessed(container);
+
+        await processJobContainer(container);
 
         return;
     }
@@ -184,10 +202,12 @@ async function processElement(element: Element): Promise<void>
         return;
     }
 
-    const container = findJobContainer(applicationLink);
+    const applicationContainer = findJobContainer(applicationLink);
 
-    if (container !== null) {
-        await processJobContainer(container);
+    if (applicationContainer !== null) {
+        clearProcessed(applicationContainer);
+
+        await processJobContainer(applicationContainer);
     }
 }
 

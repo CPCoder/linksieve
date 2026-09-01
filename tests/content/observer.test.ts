@@ -20,6 +20,12 @@ function flushMutations(): Promise<void>
 
 describe("ContentObserver", () => {
     beforeEach(() => {
+        if (document.body === null) {
+            document.documentElement.appendChild(
+                document.createElement("body"),
+            );
+        }
+
         document.body.innerHTML = "";
     });
 
@@ -266,6 +272,31 @@ describe("ContentObserver", () => {
         await flushMutations();
 
         expect(handler).not.toHaveBeenCalled();
+
+        observer.stop();
+    });
+
+    it("processes the mutation target when an element is removed", async () => {
+        const handler = vi.fn();
+        const observer = new ContentObserver(handler);
+
+        observer.start();
+
+        const container = document.createElement("div");
+        const child = document.createElement("span");
+
+        container.appendChild(child);
+        document.body.appendChild(container);
+
+        await flushMutations();
+
+        handler.mockClear();
+
+        container.removeChild(child);
+
+        await flushMutations();
+
+        expect(handler).toHaveBeenCalledWith(container);
 
         observer.stop();
     });

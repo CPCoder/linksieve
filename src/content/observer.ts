@@ -13,6 +13,15 @@ const OBSERVED_ATTRIBUTES = [
     "aria-label",
 ];
 
+const ELEMENT_NODE = 1;
+
+function isElement(
+    node: Node,
+): node is Element
+{
+    return node.nodeType === ELEMENT_NODE;
+}
+
 export class ContentObserver
 {
     private readonly observer: MutationObserver;
@@ -49,7 +58,7 @@ export class ContentObserver
 
         for (const mutation of mutations) {
             if (mutation.type === "attributes") {
-                if (mutation.target instanceof Element) {
+                if (isElement(mutation.target)) {
                     elements.add(mutation.target);
                 }
 
@@ -57,7 +66,7 @@ export class ContentObserver
             }
 
             for (const node of mutation.addedNodes) {
-                if (!(node instanceof Element)) {
+                if (!isElement(node)) {
                     continue;
                 }
 
@@ -65,6 +74,12 @@ export class ContentObserver
 
                 for (const element of node.querySelectorAll("*")) {
                     elements.add(element);
+                }
+            }
+
+            if (mutation.removedNodes.length > 0) {
+                if (isElement(mutation.target)) {
+                    elements.add(mutation.target);
                 }
             }
         }

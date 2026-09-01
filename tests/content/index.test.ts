@@ -355,4 +355,248 @@ describe("LinkedIn content integration", () => {
             job?.classList.contains("linksieve-hidden"),
         ).toBe(false);
     });
+
+    it("re-evaluates a job when the application URL changes", async () => {
+        getConfiguration.mockResolvedValue({
+            enabled: true,
+            filters: [
+                {
+                    id: "micro1-ai",
+                    value: "micro1.ai",
+                    matchType: "domain",
+                    enabled: true,
+                },
+            ],
+        });
+
+        document.body.innerHTML = `
+        <ul>
+            <li class="jobs-search-results__list-item">
+                <div class="job-card-container">
+                    <a
+                        aria-label="Apply on company website"
+                        href="https://www.linkedin.com/safety/go/?url=https%3A%2F%2Fjobs.micro1.ai%2Fpost%2F123"
+                    >
+                        Apply
+                    </a>
+                </div>
+            </li>
+        </ul>
+    `;
+
+        await import("../../src/content/index");
+
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        const job = document.querySelector(
+            ".jobs-search-results__list-item",
+        );
+
+        const link = document.querySelector<HTMLAnchorElement>(
+            "a[aria-label='Apply on company website']",
+        );
+
+        if (job === null || link === null) {
+            throw new Error("Test DOM initialization failed.");
+        }
+
+        expect(
+            job.classList.contains("linksieve-hidden"),
+        ).toBe(true);
+
+        link.href =
+            "https://www.linkedin.com/safety/go/?url=https%3A%2F%2Fjobs.example.com%2Fpost%2F123";
+
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        expect(
+            job.classList.contains("linksieve-hidden"),
+        ).toBe(false);
+    });
+
+    it("re-hides a job when its application URL changes to a matching domain", async () => {
+        getConfiguration.mockResolvedValue({
+            enabled: true,
+            filters: [
+                {
+                    id: "micro1-ai",
+                    value: "micro1.ai",
+                    matchType: "domain",
+                    enabled: true,
+                },
+            ],
+        });
+
+        document.body.innerHTML = `
+        <ul>
+            <li class="jobs-search-results__list-item">
+                <div class="job-card-container">
+                    <a
+                        aria-label="Apply on company website"
+                        href="https://www.linkedin.com/safety/go/?url=https%3A%2F%2Fjobs.example.com%2Fpost%2F123"
+                    >
+                        Apply
+                    </a>
+                </div>
+            </li>
+        </ul>
+    `;
+
+        await import("../../src/content/index");
+
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        const job = document.querySelector(
+            ".jobs-search-results__list-item",
+        );
+
+        const link = document.querySelector<HTMLAnchorElement>(
+            "a[aria-label='Apply on company website']",
+        );
+
+        if (job === null || link === null) {
+            throw new Error("Test DOM initialization failed.");
+        }
+
+        expect(
+            job.classList.contains("linksieve-hidden"),
+        ).toBe(false);
+
+        link.href =
+            "https://www.linkedin.com/safety/go/?url=https%3A%2F%2Fjobs.micro1.ai%2Fpost%2F123";
+
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        expect(
+            job.classList.contains("linksieve-hidden"),
+        ).toBe(true);
+    });
+
+    it("unhides a job when its application link is removed", async () => {
+        getConfiguration.mockResolvedValue({
+            enabled: true,
+            filters: [
+                {
+                    id: "micro1-ai",
+                    value: "micro1.ai",
+                    matchType: "domain",
+                    enabled: true,
+                },
+            ],
+        });
+
+        document.body.innerHTML = `
+        <ul>
+            <li class="jobs-search-results__list-item">
+                <div class="job-card-container">
+                    <a
+                        aria-label="Apply on company website"
+                        href="https://www.linkedin.com/safety/go/?url=https%3A%2F%2Fjobs.micro1.ai%2Fpost%2F123"
+                    >
+                        Apply
+                    </a>
+                </div>
+            </li>
+        </ul>
+    `;
+
+        await import("../../src/content/index");
+
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        const job = document.querySelector(
+            ".jobs-search-results__list-item",
+        );
+
+        const link = document.querySelector<HTMLAnchorElement>(
+            "a[aria-label='Apply on company website']",
+        );
+
+        if (job === null || link === null) {
+            throw new Error("Test DOM initialization failed.");
+        }
+
+        expect(
+            job.classList.contains("linksieve-hidden"),
+        ).toBe(true);
+
+        link.remove();
+
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        expect(
+            job.classList.contains("linksieve-hidden"),
+        ).toBe(false);
+    });
+
+    it("handles replacement of an application link", async () => {
+        getConfiguration.mockResolvedValue({
+            enabled: true,
+            filters: [
+                {
+                    id: "micro1-ai",
+                    value: "micro1.ai",
+                    matchType: "domain",
+                    enabled: true,
+                },
+            ],
+        });
+
+        document.body.innerHTML = `
+        <ul>
+            <li class="jobs-search-results__list-item">
+                <div class="job-card-container">
+                    <a
+                        aria-label="Apply on company website"
+                        href="https://www.linkedin.com/safety/go/?url=https%3A%2F%2Fjobs.micro1.ai%2Fpost%2F123"
+                    >
+                        Apply
+                    </a>
+                </div>
+            </li>
+        </ul>
+    `;
+
+        await import("../../src/content/index");
+
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        const job = document.querySelector(
+            ".jobs-search-results__list-item",
+        );
+
+        const oldLink = document.querySelector<HTMLAnchorElement>(
+            "a[aria-label='Apply on company website']",
+        );
+
+        if (job === null || oldLink === null) {
+            throw new Error("Test DOM initialization failed.");
+        }
+
+        expect(
+            job.classList.contains("linksieve-hidden"),
+        ).toBe(true);
+
+        const newLink = document.createElement("a");
+
+        newLink.setAttribute(
+            "aria-label",
+            "Apply on company website",
+        );
+
+        newLink.href =
+            "https://www.linkedin.com/safety/go/?url=https%3A%2F%2Fjobs.example.com%2Fpost%2F123";
+
+        oldLink.replaceWith(newLink);
+
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        expect(
+            job.classList.contains("linksieve-hidden"),
+        ).toBe(false);
+    });
 });
