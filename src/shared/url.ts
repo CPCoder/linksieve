@@ -8,6 +8,7 @@
 
 const LINKEDIN_HOST = "www.linkedin.com";
 const LINKEDIN_SAFETY_PATH = "/safety/go/";
+const LINKEDIN_JOB_PATH_PATTERN = /^\/jobs\/view\/(\d+)(?:\/|$)/;
 
 export function normalizeUrl(value: string): string | null
 {
@@ -23,10 +24,7 @@ export function normalizeUrl(value: string): string | null
         url.hash = "";
         url.hostname = url.hostname.toLowerCase();
 
-        if (
-            (url.protocol === "https:" && url.port === "443")
-            || (url.protocol === "http:" && url.port === "80")
-        ) {
+        if ((url.protocol === "https:" && url.port === "443") || (url.protocol === "http:" && url.port === "80")) {
             url.port = "";
         }
 
@@ -70,10 +68,7 @@ export function normalizeDomain(value: string): string | null
     return domain === "" ? null : domain;
 }
 
-export function matchesDomain(
-    url: string,
-    domain: string,
-): boolean
+export function matchesDomain(url: string, domain: string): boolean
 {
     const hostname = getDomain(url);
     const normalizedDomain = normalizeDomain(domain);
@@ -85,10 +80,7 @@ export function matchesDomain(
     return (hostname === normalizedDomain || hostname.endsWith(`.${normalizedDomain}`));
 }
 
-export function matchesUrl(
-    url: string,
-    filter: string,
-): boolean
+export function matchesUrl(url: string, filter: string): boolean
 {
     const normalizedUrl = normalizeUrl(url);
     const normalizedFilter = normalizeUrl(filter);
@@ -135,7 +127,39 @@ export function extractLinkedInSafetyDestination(
             return null;
         }
 
-        return destination;
+        return normalizeUrl(destination);
+    } catch {
+        return null;
+    }
+}
+
+export function resolveExternalApplicationUrl(value: string): string | null
+{
+    if (isLinkedInSafetyUrl(value)) {
+        return extractLinkedInSafetyDestination(value);
+    }
+
+    return normalizeUrl(value);
+}
+
+export function extractLinkedInJobId(value: string): string | null
+{
+    const normalizedUrl = normalizeUrl(value);
+
+    if (normalizedUrl === null) {
+        return null;
+    }
+
+    try {
+        const url = new URL(normalizedUrl);
+
+        if (url.hostname !== LINKEDIN_HOST) {
+            return null;
+        }
+
+        const match = url.pathname.match(LINKEDIN_JOB_PATH_PATTERN);
+
+        return match?.[1] ?? null;
     } catch {
         return null;
     }
